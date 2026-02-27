@@ -1,0 +1,35 @@
+{
+  "discovered": [
+    {
+      "paper_id": "ci-2024-001",
+      "title": "Outcomes of Pediatric Cochlear Implantation: A Multi-center Study",
+      "pdf_url": "https://example.org/papers/ci-2024-001.pdf",
+      "added_at": "2026-02-27 20:23:03.313977+00:00",
+      "status": "ignored",
+      "year": null,
+      "journal": null
+    },
+    {
+      "paper_id": "ci-2023-007",
+      "title": "Long-term Speech Perception in Adult CI Users",
+      "pdf_url": "https://example.org/papers/ci-2023-007.pdf",
+      "added_at": "2026-02-27 20:23:03.313977+00:00",
+      "status": "new",
+      "year": null,
+      "journal": null
+    },
+    {
+      "paper_id": "ci-2022-010",
+      "title": "Quality of Life Changes After Bilateral Cochlear Implantation",
+      "pdf_url": "https://example.org/papers/ci-2022-010.pdf",
+      "added_at": "2026-02-27 20:23:03.313977+00:00",
+      "status": "new",
+      "year": null,
+      "journal": null
+    }
+  ],
+  "ignored_ids": [
+    "ci-2024-001"
+  ],
+  "analyzed": []
+}

@@ -1,0 +1,679 @@
+Audiology Research Copilot — Hackathon PRD
+
+Working name: CI Research Copilot + Research Watch
+Date/Context: Built live at hackathon; demo-first; single-user
+
+1) Product Overview
+1.1 What we’re building
+
+A single-user web app that helps an audiologist rapidly triage cochlear implant (CI) research papers by producing a structured, traceable critique.
+
+The hackathon version adds a Research Watch feature: an autonomous discovery layer that surfaces new CI-related research items (via sponsor tool Yutori Scouts) and presents them in the UI for one-click analysis or ignore.
+
+1.2 Guiding principle
+
+Structured skepticism, not clinical decision support.
+The system does not provide medical advice. It helps the user read research faster and more critically.
+
+1.3 Key promise to the user
+
+“Show me what’s new.”
+
+“Tell me what to pay attention to and what to question.”
+
+“Show your work (traceability).”
+
+2) Goals
+G1 — Time savings
+
+Reduce time to triage a paper from ~30–60 minutes to ~2–10 minutes.
+
+G2 — Better skepticism
+
+Surface methodological weaknesses, statistical red flags, bias signals, and promotional language.
+
+G3 — Better trust through traceability
+
+Every score must have rubric criteria, point deductions, and evidence references tied to extracted structured fields.
+
+G4 — Demo clarity
+
+A judge should understand the product in 30 seconds:
+
+right panel shows “new papers”
+
+clicking analyze produces a structured report and scores with “Why?”
+
+G5 — Sponsor integration (explicit)
+
+Use Render for deployment of both frontend and backend.
+
+Use Render Skills in Cursor to help automate deployment tasks.
+
+Use Yutori Scouts (web UI) as the discovery agent system to monitor for new CI research.
+
+3) Non-goals (Hackathon)
+
+Not a clinical decision support system, no diagnosis/treatment recommendations.
+
+Not HIPAA / PHI workflows; do not store protected health data.
+
+Not multi-user, no auth, no user accounts.
+
+Not a long-term knowledge base.
+
+Not full PubMed-scale crawling or generalized research search engine.
+
+No OCR for scanned PDFs in V0 (detect and warn).
+
+No dynamic agent routing (pipeline is fixed and predictable).
+
+No requirement to implement Yutori MCP or cron schedulers (we are not using MCP; Yutori Scout provides scheduling).
+
+4) Target User & Context
+Primary user
+
+One clinician/research consumer (audiologist) who reads CI papers frequently and needs rapid triage + critique.
+
+Environment
+
+Laptop/desktop browser. Hackathon demo environment.
+
+User pain points
+
+“Most papers have fluff; I need the key weaknesses fast.”
+
+“Promotional conclusions are easy to miss.”
+
+“I want to know why something scored poorly, not just be told it did.”
+
+5) Core User Experience
+5.1 Main screen layout
+
+Two-column layout:
+
+Left: Analyze Panel
+
+PDF upload (drag/drop)
+
+Analyze button
+
+Progress indicator (“30–120 seconds”)
+
+Results rendering
+
+Right: Research Watch Panel
+
+“Refresh” button (optional depending on Scout flow)
+
+List of newly discovered research items
+
+Each item shows:
+
+Title
+
+Year
+
+Journal (if available)
+
+Short teaser/abstract snippet (optional)
+
+Buttons: Analyze / Ignore
+
+5.2 Primary user flows
+Flow A — Upload & Analyze
+
+User uploads a PDF.
+
+Clicks Analyze.
+
+System runs fixed pipeline.
+
+UI shows results:
+
+Executive Snapshot
+
+Score Dashboard (5)
+
+Deep Dive sections
+
+Traceability expansion
+
+Flow B — Research Watch → Analyze
+
+Right panel shows new paper items discovered by Yutori Scout.
+
+User clicks Analyze on an item.
+
+Backend obtains paper content:
+
+Best: download PDF from provided URL (if available)
+
+Fallback: analyze abstract text only (with “limited evidence” warning)
+
+Same pipeline runs and returns results.
+
+Flow C — Ignore
+
+User clicks Ignore on a paper.
+
+It disappears from “new” list (moves to ignored in local store).
+
+6) Output Structure (What the user sees)
+
+Results are layered, and everything is collapsible by default.
+
+Layer 1: Executive Snapshot (2–3 min skim)
+
+What this paper is about (1 paragraph)
+
+Population / sample / design (1–2 lines)
+
+Main findings (3–5 bullets)
+
+Biggest strengths (2–3 bullets)
+
+Biggest concerns (2–3 bullets)
+
+Priority recommendation: High / Selective / Low
+
+Confidence note (based on extraction completeness)
+
+Layer 2: Score Dashboard (fast scan)
+
+Five scores (0–100), each with:
+
+one-line justification
+
+“Why?” expandable panel showing top deductions + evidence fields
+
+Scores:
+
+Statistical Rigor
+
+Methodological Soundness
+
+Bias / Promotional Risk
+
+Clinical Relevance
+
+Practical Impact / Priority
+
+Layer 3: Deep Dive (10-minute read)
+
+Per evaluator:
+
+Key findings
+
+Risks / flags
+
+Traceability rubric (criteria → points → rationale)
+
+“Questions to ask before trusting/citing”
+
+7) System Architecture
+7.1 Frontend
+
+Generated quickly using Lovable
+
+Lives in its own GitHub repo
+
+Deployed as a Render Static Site
+
+Calls backend API via HTTPS
+
+Stores backend URL in a config/env var
+
+Frontend responsibilities:
+
+file upload
+
+show progress state
+
+render JSON results into scannable UI
+
+right-side discovery list + actions
+
+7.2 Backend
+
+FastAPI service in its own GitHub repo
+
+Deployed on Render Web Service
+
+Single main analysis endpoint + discovery endpoints
+
+Uses OpenAI API for structured outputs
+
+Uses a JSON file store for Research Watch (hackathon persistence)
+
+Backend responsibilities:
+
+ingest content (PDF upload or URL/abstract from discovery)
+
+extract text
+
+run pipeline sequentially
+
+return structured report JSON
+
+log progress steps clearly for debugging
+
+7.3 Sponsor tools (explicit)
+Render (Hosting)
+
+Backend: Render Web Service
+
+Frontend: Render Static Site
+
+Uses standard $PORT binding and env vars.
+
+Render Skills (Deployment Automation)
+
+Installed into Cursor before coding begins.
+
+Used to help automate:
+
+provisioning services from repos
+
+configuring env vars
+
+deploying / redeploying
+
+debugging deployment issues
+
+Important: Skills are deployment helpers, not app logic.
+
+Yutori Scouts (Discovery)
+
+Discovery is powered by a Yutori Scout configured in Yutori’s web UI.
+
+Scout runs on Yutori’s schedule (no cron required).
+
+Scout output is used to populate the Research Watch list.
+
+We are not implementing MCP in hackathon scope.
+
+8) Data Handling & Storage
+8.1 Privacy stance
+
+No long-term storage of PDFs by default.
+
+Avoid logging raw paper text in production mode.
+
+DEV_MODE may store debug artifacts locally for hackathon troubleshooting.
+
+8.2 Research Watch persistence
+
+We need lightweight persistence for discovered items and ignored/analyzed states.
+
+Storage mechanism: research_store.json on backend.
+
+This is intentionally simple:
+
+No database
+
+Works in hackathon
+
+Good enough for demo
+
+Tradeoff: Render filesystem may be ephemeral; that’s acceptable. If it resets, the Scout refresh repopulates.
+
+8.3 research_store.json schema
+{
+  "discovered": [
+    {
+      "paper_id": "string",
+      "title": "string",
+      "authors": ["string"],
+      "year": 2024,
+      "journal": "string",
+      "url": "string|null",
+      "abstract": "string|null",
+      "source": "yutori_scout|fallback",
+      "added_at": "iso_timestamp",
+      "status": "new|analyzed|ignored"
+    }
+  ],
+  "ignored_ids": ["paper_id"],
+  "analyzed": [
+    {
+      "paper_id": "string",
+      "analyzed_at": "iso_timestamp",
+      "last_report": { "optional": "cached report json for demo fallback" }
+    }
+  ]
+}
+9) Pipeline Definition (Fixed, predictable)
+
+The pipeline is sequential function calls (no dynamic routing).
+
+Step 0 — Ingestion + PDF text extraction
+
+Input:
+
+PDF upload, or downloaded PDF from URL, or abstract text
+
+Output:
+
+extracted_text + meta (pages, chars, words)
+
+extraction warnings if needed
+
+Failure handling:
+
+If extracted text < threshold → “PDF may be scanned” error
+
+Return user-friendly message and stop
+
+Step 1 — Lightweight classification
+
+Input:
+
+extracted text (possibly truncated)
+Output:
+
+paper_type (trial/cohort/case/meta/engineering/theoretical/unclear)
+
+population (pediatric/adult/mixed/unclear)
+
+domain_focus (string)
+
+funding_detected (yes/no/unclear)
+
+Hard requirement:
+
+Must not hallucinate; use “unclear” if uncertain.
+
+Step 2 — Canonical IR extraction (paper_ir)
+
+The canonical IR is the backbone.
+
+It must be stable and schema-validated.
+
+PaperIR fields include:
+
+Citation block: title, authors, year, journal
+
+study_design_summary
+
+population_summary + inclusion/exclusion
+
+sample sizes (total + groups when explicit)
+
+primary_outcomes + measurement instruments
+
+main_claims
+
+key_numerical_results
+
+stated_limitations
+
+funding_statement + conflict_of_interest_statement
+
+statistical methods/results mentions (p-values, “significant”, named tests)
+
+Hard requirement:
+
+Only extract what is explicitly present.
+
+Use null/empty lists when absent.
+
+Avoid “interpretive filler” in extraction fields.
+
+Step 3 — Evaluators (five)
+
+Each evaluator consumes paper_ir only.
+
+Each produces:
+
+score_0_100
+
+strengths list
+
+risks list
+
+traceability rubric list
+
+questions_to_ask list (where relevant)
+
+Evaluators:
+
+Statistical Rigor
+
+effect size/CI presence, p-values usage, subgroup issues, sample size adequacy heuristics, overclaiming vs evidence
+
+Methodological Soundness
+
+design strength, controls, confounders, attrition, endpoints clarity, inclusion/exclusion clarity, follow-up quality
+
+Bias / Promotional Risk
+
+COI/funding signals, marketing language, downplayed limitations, exaggerated conclusions, selective reporting
+
+Clinical Relevance
+
+applicability to real-world CI population, meaningful outcomes, generalizability, who it applies to vs doesn’t
+
+Practical Impact / Priority
+
+novelty, practice influence, “must read vs skim”, confirmatory vs incremental
+
+outputs priority label: High/Selective/Low + rationale
+
+Step 4 — Aggregation & report composition
+
+Produces final report object:
+
+executive_summary
+
+score_dashboard
+
+priority_recommendation
+
+deep_dive_sections
+
+disclaimers
+
+quality warnings (extraction/IR completeness)
+
+10) Scoring Philosophy & Traceability
+
+Scores are heuristic indicators.
+
+Traceability rubric format
+
+Each evaluator outputs rubric entries:
+
+criterion_id
+
+description
+
+max_points
+
+assigned_points
+
+rationale (plain language)
+
+evidence_fields (IR field names used)
+
+Determinism requirement:
+
+Final score calculation is done in Python (cap points, sum, penalties).
+
+LLM provides only per-criterion assigned points + rationale.
+
+UI Traceability requirements
+
+Clicking a score reveals:
+
+top 3 deductions
+
+which criterion caused it
+
+evidence fields used (e.g., “no control group in study_design_summary”)
+
+11) API Design
+POST /analyze
+
+Accepts either:
+
+multipart PDF upload (file)
+or
+
+JSON { "paper_id": "...", "mode": "url|abstract" }
+
+Response (high-level):
+
+{
+  "meta": {
+    "request_id": "string",
+    "runtime_s": 0.0,
+    "timestamps": { "started": "...", "finished": "..." },
+    "model_versions": { "classifier": "...", "extractor": "...", "evaluator": "..." }
+  },
+  "classification": { ... },
+  "paper_ir": { ... },
+  "evaluations": {
+    "statistical_rigor": { ... },
+    "methodological_soundness": { ... },
+    "bias_promotional_risk": { ... },
+    "clinical_relevance": { ... },
+    "practical_impact_priority": { ... }
+  },
+  "report": {
+    "executive_snapshot": { ... },
+    "score_dashboard": [ ... ],
+    "priority_recommendation": "High|Selective|Low",
+    "deep_dive_sections": [ ... ],
+    "disclaimer": "..."
+  },
+  "warnings": [ ... ],
+  "error": null
+}
+GET /discover
+
+Returns list of “new” discovered items from research_store.json.
+
+POST /discover/refresh
+
+Triggers a refresh of discovered items.
+Implementation options:
+
+pull from a Yutori Scout export (manual paste or API if easily available)
+
+fallback to a static curated list for demo
+
+POST /discover/ignore
+
+Body: { "paper_id": "..." }
+Moves item to ignored list.
+
+GET /health
+
+Returns { "status": "ok" }.
+
+12) Frontend Requirements
+Required screens
+
+Home / Dashboard
+
+Upload & Analyze panel
+
+Research Watch list with Analyze/Ignore
+
+Results View (can be same page)
+
+Executive Snapshot
+
+Score cards
+
+Expandable traceability
+
+Collapsible deep dives
+
+UI behavior
+
+Show “in progress” step indicator (even if approximate)
+
+Show “limited evidence” banner if analyzing abstract-only
+
+Provide a “Load sample report” fallback for demo resilience
+
+13) Deployment Requirements (Render + Render Skills)
+Backend (Render Web Service)
+
+Start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+Env vars:
+
+OPENAI_API_KEY
+
+DEV_MODE (optional)
+
+FRONTEND_ORIGIN for CORS
+
+Frontend (Render Static Site)
+
+Config: BACKEND_URL
+
+Ensure HTTPS calls to backend
+
+Render Skills usage
+
+Skills installed into Cursor prior to coding kickoff
+
+Skills used to assist with:
+
+service creation from GitHub repo
+
+env var configuration
+
+deployment triggers
+
+debugging misconfigurations (ports/env/CORS)
+
+14) Safety, Disclaimers, and Guardrails
+
+Always display disclaimer in UI:
+
+“This is a reading aid / thinking assistant, not medical advice.”
+
+“Scores are heuristic signals.”
+
+If extraction incomplete:
+
+show warning: “Report quality may be reduced.”
+
+If evaluator fails:
+
+return partial report with evaluator marked unavailable.
+
+15) Performance & Reliability Targets
+
+Acceptable runtime per paper: 30–120 seconds
+
+Must handle failure gracefully:
+
+extraction fail → helpful error
+
+evaluator fail → partial results
+
+Must provide clear server-side logs showing step boundaries and debug context (for hackathon troubleshooting)
+
+16) Demo Readiness Requirements
+
+Have one known-good demo PDF ready
+
+Have one sample output JSON ready
+
+If discovery fails, have fallback discovered list
+
+Demo script:
+
+“These are new CI papers (Yutori Scout).”
+
+Click Analyze.
+
+Show scores + traceability.
+
+Show at least one bias flag or methodological concern.

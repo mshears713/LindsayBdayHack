@@ -1,0 +1,7 @@
+{
+  "enabledMcpjsonServers": [
+    "filesystem",
+    "sequential-thinking",
+    "github"
+  ]
+}
