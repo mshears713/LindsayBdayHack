@@ -9,12 +9,8 @@ from fastapi import APIRouter, Body, File, HTTPException, Request, UploadFile, s
 
 from ..config import get_settings
 from ..extractor import extract_pdf_text
-from ..classification import classify_paper
-from ..paper_ir import extract_paper_ir
-from ..evaluators.statistical_rigor import evaluate_statistical_rigor
-from ..evaluators.methodological_soundness import evaluate_methodological_soundness
-from ..evaluators.clinical_relevance import evaluate_clinical_relevance
-from ..evaluators.practical_impact_priority import evaluate_practical_impact
+from ..flows.analyze_flow import analyze_paper_flow
+from ..services.aggregation import build_aggregation
 from ..models import (
     Aggregation,
     AnalyzeMeta,
@@ -35,80 +31,6 @@ router = APIRouter(tags=["analyze"])
 MAX_BYTES = 25 * 1024 * 1024  # 25MB
 
 
-def _build_aggregation(evaluations: Evaluations) -> Aggregation:
-    scores = []
-    for e in (
-        evaluations.statistical_rigor,
-        evaluations.methodological_soundness,
-        # bias_promotional_risk not yet implemented
-        evaluations.clinical_relevance,
-        evaluations.practical_impact_priority,
-    ):
-        if e is not None:
-            scores.append(e.score)
-
-    overall_score = round(sum(scores) / len(scores)) if scores else 0
-
-    if overall_score >= 80:
-        quality_band = "High Quality"
-    elif overall_score >= 60:
-        quality_band = "Moderate Quality"
-    else:
-        quality_band = "Low Quality"
-
-    seen: set[str] = set()
-    top_strengths: list[str] = []
-    top_risks: list[str] = []
-
-    for e in (
-        evaluations.statistical_rigor,
-        evaluations.methodological_soundness,
-        evaluations.clinical_relevance,
-        evaluations.practical_impact_priority,
-    ):
-        if e is None:
-            continue
-        for s in e.strengths:
-            key = s.strip().lower()
-            if key not in seen and len(top_strengths) < 5:
-                seen.add(key)
-                top_strengths.append(s)
-
-    seen = set()
-    for e in (
-        evaluations.statistical_rigor,
-        evaluations.methodological_soundness,
-        evaluations.clinical_relevance,
-        evaluations.practical_impact_priority,
-    ):
-        if e is None:
-            continue
-        for r in e.risks:
-            key = r.strip().lower()
-            if key not in seen and len(top_risks) < 5:
-                seen.add(key)
-                top_risks.append(r)
-
-    practical_summary = None
-    if evaluations.practical_impact_priority is not None:
-        practical_summary = PracticalImpactSummary(
-            score=evaluations.practical_impact_priority.score,
-            priority_label=evaluations.practical_impact_priority.priority_label,
-        )
-
-    return Aggregation(
-        overall_score=overall_score,
-        quality_band=quality_band,
-        evaluator_summary=EvaluatorSummary(
-            statistical_rigor=evaluations.statistical_rigor.score if evaluations.statistical_rigor else None,
-            methodological_soundness=evaluations.methodological_soundness.score if evaluations.methodological_soundness else None,
-            bias_promotional_risk=None,
-            clinical_relevance=evaluations.clinical_relevance.score if evaluations.clinical_relevance else None,
-            practical_impact_priority=practical_summary,
-        ),
-        top_strengths=top_strengths,
-        top_risks=top_risks,
-    )
 
 
 def _tmp_dir() -> Path:
@@ -386,7 +308,7 @@ async def analyze_entrypoint(
             extraction_info.average_chars_per_page,
         )
 
-        # 5) Readability gate before classification
+        # 5) Readability gate before Prefect flow
         if total_chars < 1500 or total_words < 300:
             warning_msg = "Insufficient readable text for reliable classification."
             warnings.append(warning_msg)
@@ -400,260 +322,31 @@ async def analyze_entrypoint(
                 error="Extraction quality too low to classify.",
             )
 
-        # 6) Mini classification call
+        # 6) Run Prefect flow for the main analysis pipeline
+        logger.info("Starting Prefect analysis flow")
         try:
-            cls = classify_paper(
-                extracted_text=extraction_result.text,
-                total_characters=total_chars,
-                total_words=total_words,
-            )
-        except RuntimeError as exc:
-            # Explicit schema / config failures
-            msg = str(exc)
-            logger.warning("Classification failed: %s", msg)
-            error_msg = (
-                "Classification schema validation failed."
-                if "schema validation failed" in msg.lower()
-                else msg
-            )
-            return AnalyzeResponse(
+            response = analyze_paper_flow(
                 meta=meta,
-                extraction=extraction_info,
+                extraction_result=extraction_result,
                 preview=preview,
-                classification=None,
                 warnings=warnings,
-                error=error_msg,
             )
+            
+            # Check if flow returned an error
+            if response.error:
+                logger.warning("Prefect flow completed with error: %s", response.error)
+            
+            return response
+            
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during classification: %s", exc)
+            logger.error("Prefect flow failed unexpectedly: %s", exc)
             return AnalyzeResponse(
                 meta=meta,
                 extraction=extraction_info,
                 preview=preview,
-                classification=None,
                 warnings=warnings,
-                error="Classification failed.",
+                error="Analysis pipeline failed.",
             )
-
-        classification_result = ClassificationResult(
-            paper_type=cls.paper_type,
-            population=cls.population,
-            domain_focus=cls.domain_focus,
-            funding_detected=cls.funding_detected,
-        )
-
-        logger.info(
-            "Classification added to response: paper_type=%s population=%s funding_detected=%s",
-            classification_result.paper_type,
-            classification_result.population,
-            classification_result.funding_detected,
-        )
-
-        # 7) Canonical IR extraction
-        logger.info("IR extraction started")
-        classification_context = {
-            "paper_type": classification_result.paper_type,
-            "population": classification_result.population,
-            "domain_focus": classification_result.domain_focus,
-            "funding_detected": classification_result.funding_detected,
-        }
-        try:
-            paper_ir = extract_paper_ir(
-                extracted_text=extraction_result.text,
-                classification_context=classification_context,
-            )
-        except RuntimeError as exc:
-            msg = str(exc)
-            logger.warning("IR extraction failed: %s", msg)
-            warning_msg = "IR extraction schema validation failed."
-            if "schema validation failed" in msg.lower():
-                warnings.append(warning_msg)
-                error_msg = warning_msg
-            else:
-                error_msg = msg
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=None,
-                warnings=warnings,
-                error=error_msg,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during IR extraction: %s", exc)
-            warnings.append("IR extraction failed.")
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=None,
-                warnings=warnings,
-                error="IR extraction failed.",
-            )
-
-        logger.info(
-            "IR extraction completed. claims=%d results=%d limitations=%d",
-            len(paper_ir.main_claims),
-            len(paper_ir.key_numerical_results),
-            len(paper_ir.stated_limitations),
-        )
-
-        # 8) Statistical Rigor evaluation
-        try:
-            rigor_eval = evaluate_statistical_rigor(paper_ir)
-        except RuntimeError as exc:
-            msg = str(exc)
-            logger.warning("Statistical Rigor evaluation failed: %s", msg)
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=None,
-                warnings=warnings,
-                error=msg,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during Statistical Rigor evaluation: %s", exc)
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=None,
-                warnings=warnings,
-                error="Statistical Rigor evaluation failed.",
-            )
-
-        # 9) Methodological Soundness evaluation
-        try:
-            method_eval = evaluate_methodological_soundness(paper_ir)
-        except RuntimeError as exc:
-            msg = str(exc)
-            logger.warning("Methodological Soundness evaluation failed: %s", msg)
-            evals = Evaluations(statistical_rigor=rigor_eval)
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error=msg,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during Methodological Soundness evaluation: %s", exc)
-            evals = Evaluations(statistical_rigor=rigor_eval)
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error="Methodological Soundness evaluation failed.",
-            )
-
-        # 10) Clinical Relevance evaluation
-        try:
-            clinical_eval = evaluate_clinical_relevance(paper_ir)
-        except RuntimeError as exc:
-            msg = str(exc)
-            logger.warning("Clinical Relevance evaluation failed: %s", msg)
-            evals = Evaluations(
-                statistical_rigor=rigor_eval,
-                methodological_soundness=method_eval,
-            )
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error=msg,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during Clinical Relevance evaluation: %s", exc)
-            evals = Evaluations(
-                statistical_rigor=rigor_eval,
-                methodological_soundness=method_eval,
-            )
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error="Clinical Relevance evaluation failed.",
-            )
-
-        # 11) Practical Impact / Priority evaluation
-        try:
-            practical_eval = evaluate_practical_impact(paper_ir)
-        except RuntimeError as exc:
-            msg = str(exc)
-            logger.warning("Practical Impact evaluation failed: %s", msg)
-            evals = Evaluations(
-                statistical_rigor=rigor_eval,
-                methodological_soundness=method_eval,
-                clinical_relevance=clinical_eval,
-            )
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error=msg,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Unexpected error during Practical Impact evaluation: %s", exc)
-            evals = Evaluations(
-                statistical_rigor=rigor_eval,
-                methodological_soundness=method_eval,
-                clinical_relevance=clinical_eval,
-            )
-            return AnalyzeResponse(
-                meta=meta,
-                extraction=extraction_info,
-                preview=preview,
-                classification=classification_result,
-                paper_ir=paper_ir,
-                evaluations=evals,
-                warnings=warnings,
-                error="Practical Impact evaluation failed.",
-            )
-
-        evaluations = Evaluations(
-            statistical_rigor=rigor_eval,
-            methodological_soundness=method_eval,
-            clinical_relevance=clinical_eval,
-            practical_impact_priority=practical_eval,
-        )
-
-        return AnalyzeResponse(
-            meta=meta,
-            extraction=extraction_info,
-            preview=preview,
-            classification=classification_result,
-            paper_ir=paper_ir,
-            evaluations=evaluations,
-            aggregation=_build_aggregation(evaluations),
-            warnings=warnings,
-            error=None,
-        )
     except HTTPException as http_exc:
         # Map HTTP errors to the error field format
         logger.info("Returning error from /analyze: %s", http_exc.detail)

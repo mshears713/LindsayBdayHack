@@ -1,5 +1,8 @@
 import logging
+import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +13,19 @@ from .routes.analyze import router as analyze_router
 from .routes.search import router as search_router
 
 
+def load_environment():
+    """Load environment variables from .env file."""
+    # Try to load .env from the backend directory
+    backend_dir = Path(__file__).resolve().parents[1]
+    env_file = backend_dir / ".env"
+    
+    if env_file.exists():
+        load_dotenv(env_file)
+        print(f"Loaded environment from {env_file}")
+    else:
+        print("No .env file found, using system environment variables")
+
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -18,6 +34,7 @@ def configure_logging() -> None:
 
 
 def create_app() -> FastAPI:
+    load_environment()
     configure_logging()
     settings = get_settings()
     logger = logging.getLogger(__name__)

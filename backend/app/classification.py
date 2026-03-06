@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from openai import OpenAI
+from prefect import task
 from pydantic import BaseModel, ValidationError
 
 from .config import get_settings
@@ -40,6 +41,7 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
+@task(name="Classify Paper", retries=3, retry_delay_seconds=10)
 def classify_paper(extracted_text: str, total_characters: int, total_words: int) -> Classification:
     """
     Run a lightweight classification call using truncated extracted text.
