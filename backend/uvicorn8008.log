@@ -1,0 +1,2 @@
+12:15:25.011 | INFO    | prefect - Starting temporary server on http://127.0.0.1:8066
+See https://docs.prefect.io/v3/concepts/server#how-to-guides for more information on running a dedicated Prefect server.
