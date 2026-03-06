@@ -3,6 +3,7 @@ import logging
 from typing import List
 
 from openai import OpenAI
+from prefect import task
 from pydantic import BaseModel, Field, ValidationError
 
 from ..config import get_settings
@@ -45,6 +46,7 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
+@task(name="Evaluate Practical Impact", retries=3, retry_delay_seconds=10)
 def evaluate_practical_impact(paper_ir: PaperIR) -> PracticalImpactEvaluation:
     """
     Evaluate practical impact / priority based solely on paper_ir.

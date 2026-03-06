@@ -3,6 +3,7 @@ import logging
 from typing import List, Optional
 
 from openai import OpenAI
+from prefect import task
 from pydantic import BaseModel, Field, ValidationError
 
 from .config import get_settings
@@ -50,6 +51,7 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
+@task(name="Extract Paper IR", retries=3, retry_delay_seconds=10)
 def extract_paper_ir(extracted_text: str, classification_context: Optional[dict]) -> PaperIR:
     """
     Run the main canonical IR extraction.

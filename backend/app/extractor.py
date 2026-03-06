@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from prefect import task
 from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ class ExtractionResult:
     average_chars_per_page: Optional[float]
 
 
+@task(name="Extract PDF Text", retries=2, retry_delay_seconds=5)
 def extract_pdf_text(pdf_path: str) -> ExtractionResult:
     """
     Extract text and simple metrics from a PDF file.
