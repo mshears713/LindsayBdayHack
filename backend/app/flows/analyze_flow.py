@@ -8,7 +8,7 @@ analysis pipeline functions with proper task boundaries and parallel execution.
 import logging
 from typing import Optional
 
-from prefect import flow, task
+from prefect import flow, task, get_run_logger
 
 from ..extractor import extract_pdf_text
 from ..classification import classify_paper
@@ -53,6 +53,7 @@ def analyze_paper_flow(
     Returns:
         Complete AnalyzeResponse with all pipeline results
     """
+    logger = get_run_logger()
     logger.info("Starting Prefect analyze_paper_flow for request_id=%s", meta.request_id)
     
     try:
@@ -65,7 +66,7 @@ def analyze_paper_flow(
         )
         
         # Step 1: Classification
-        logger.info("Flow step: Classification")
+        logger.info("Starting classification step")
         classification_result = classify_paper(
             extracted_text=extraction_result.text,
             total_characters=extraction_result.total_characters,
@@ -73,7 +74,7 @@ def analyze_paper_flow(
         )
         
         # Step 2: Paper IR extraction
-        logger.info("Flow step: Paper IR extraction")
+        logger.info("Starting IR extraction step")
         classification_context = {
             "paper_type": classification_result.paper_type,
             "population": classification_result.population,
@@ -87,7 +88,10 @@ def analyze_paper_flow(
         )
         
         # Step 3: Parallel evaluator execution
-        logger.info("Flow step: Parallel evaluator execution")
+        logger.info("Running statistical rigor evaluation")
+        logger.info("Running methodological evaluation")
+        logger.info("Running clinical relevance evaluation")
+        logger.info("Running practical impact evaluation")
         
         # Run all evaluators in parallel
         statistical_eval = evaluate_statistical_rigor(paper_ir)
@@ -96,7 +100,7 @@ def analyze_paper_flow(
         practical_eval = evaluate_practical_impact(paper_ir)
         
         # Step 4: Aggregation
-        logger.info("Flow step: Result aggregation")
+        logger.info("Aggregating evaluation results")
         evaluations = Evaluations(
             statistical_rigor=statistical_eval,
             methodological_soundness=methodological_eval,
@@ -107,7 +111,7 @@ def analyze_paper_flow(
         aggregation = build_aggregation(evaluations)
         
         # Step 5: Build final response
-        logger.info("Flow step: Building final response")
+        logger.info("Building final response")
         return AnalyzeResponse(
             meta=meta,
             extraction=extraction_info,

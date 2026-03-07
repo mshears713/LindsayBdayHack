@@ -46,7 +46,11 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-@task(name="Evaluate Practical Impact", retries=3, retry_delay_seconds=10)
+@task(
+    name="Evaluate Practical Impact",
+    retries=2,
+    retry_delay_seconds=5
+)
 def evaluate_practical_impact(paper_ir: PaperIR) -> PracticalImpactEvaluation:
     """
     Evaluate practical impact / priority based solely on paper_ir.

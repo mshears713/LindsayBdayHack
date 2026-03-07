@@ -51,7 +51,11 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-@task(name="Extract Paper IR", retries=3, retry_delay_seconds=10)
+@task(
+    name="Extract Paper IR",
+    retries=2,
+    retry_delay_seconds=5
+)
 def extract_paper_ir(extracted_text: str, classification_context: Optional[dict]) -> PaperIR:
     """
     Run the main canonical IR extraction.
