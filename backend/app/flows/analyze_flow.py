@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from prefect import flow, task, get_run_logger
+from prefect.task_runners import ConcurrentTaskRunner
 
 from ..extractor import extract_pdf_text
 from ..classification import classify_paper
@@ -31,7 +32,10 @@ from ..services.aggregation import build_aggregation
 logger = logging.getLogger(__name__)
 
 
-@flow(name="Analyze Paper Flow")
+@flow(
+    name="Analyze Paper Flow",
+    task_runner=ConcurrentTaskRunner()
+)
 def analyze_paper_flow(
     meta: AnalyzeMeta,
     extraction_result,
