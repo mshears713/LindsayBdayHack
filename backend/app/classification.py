@@ -41,7 +41,11 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-@task(name="Classify Paper", retries=3, retry_delay_seconds=10)
+@task(
+    name="Classify Paper",
+    retries=2,
+    retry_delay_seconds=5
+)
 def classify_paper(extracted_text: str, total_characters: int, total_words: int) -> Classification:
     """
     Run a lightweight classification call using truncated extracted text.

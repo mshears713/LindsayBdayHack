@@ -45,7 +45,11 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-@task(name="Evaluate Clinical Relevance", retries=3, retry_delay_seconds=10)
+@task(
+    name="Evaluate Clinical Relevance",
+    retries=2,
+    retry_delay_seconds=5
+)
 def evaluate_clinical_relevance(paper_ir: PaperIR) -> ClinicalRelevanceEvaluation:
     """
     Evaluate clinical relevance based solely on paper_ir.

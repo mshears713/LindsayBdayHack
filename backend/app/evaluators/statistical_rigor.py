@@ -43,7 +43,11 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-@task(name="Evaluate Statistical Rigor", retries=3, retry_delay_seconds=10)
+@task(
+    name="Evaluate Statistical Rigor",
+    retries=2,
+    retry_delay_seconds=5
+)
 def evaluate_statistical_rigor(paper_ir: PaperIR) -> StatisticalRigorEvaluation:
     """
     Evaluate statistical rigor based solely on paper_ir.
